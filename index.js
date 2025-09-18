@@ -5,19 +5,22 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const cors = require('cors'); // <- добавили cors
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
+// Путь к файлу пользователей
 const USERS_FILE = path.join(__dirname, 'users.json');
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret1396';
 
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([]));
 
+app.use(cors()); // <- включили CORS для всех доменов
 app.use(express.json());
 
-// ===== Users helpers =====
+// ===== Пользователи =====
 function readUsers() {
   return JSON.parse(fs.readFileSync(USERS_FILE));
 }
@@ -25,7 +28,7 @@ function writeUsers(users) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-// Register
+// Регистрация
 app.post('/api/register', async (req, res) => {
   try {
     const { name, login, password } = req.body;
@@ -44,7 +47,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Login
+// Вход
 app.post('/api/login', async (req, res) => {
   try {
     const { login, password } = req.body;
@@ -63,7 +66,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ===== WebRTC signaling =====
+// ===== WebRTC Signaling =====
 const rooms = {};
 
 io.on('connection', socket => {
