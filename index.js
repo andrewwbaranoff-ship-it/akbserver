@@ -11,96 +11,63 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 const USERS_FILE = path.join(__dirname, 'users.json');
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecret1396';
 
-// создаём файл users.json если не существует
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([]));
 
 app.use(express.json());
 
-// ==== Helper functions ====
+// ===== Users helpers =====
 function readUsers() {
-  const data = fs.readFileSync(USERS_FILE);
-  return JSON.parse(data);
+  return JSON.parse(fs.readFileSync(USERS_FILE));
 }
 function writeUsers(users) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-// ==== API ====
-
-// регистрация
+// Register
 app.post('/api/register', async (req, res) => {
-  const { name, login, password } = req.body;
-  if (!name || !login || !password) return res.status(400).json({ error: 'Все поля обязательны' });
+  try {
+    const { name, login, password } = req.body;
+    if (!name || !login || !password) return res.status(400).json({ error: 'Все поля обязательны' });
 
-  const users = readUsers();
-  if (users.find(u => u.login === login)) return res.status(400).json({ error: 'Логин уже занят' });
+    const users = readUsers();
+    if (users.find(u => u.login === login)) return res.status(400).json({ error: 'Логин уже занят' });
 
-  const hash = await bcrypt.hash(password, 10);
-  const id = users.length ? users[users.length-1].id + 1 : 1;
-  users.push({ id, name, login, passwordHash: hash });
-  writeUsers(users);
-
-  res.json({ ok: true });
+    const hash = await bcrypt.hash(password, 10);
+    users.push({ id: Date.now(), name, login, passwordHash: hash });
+    writeUsers(users);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// логин
+// Login
 app.post('/api/login', async (req, res) => {
-  const { login, password } = req.body;
-  const users = readUsers();
-  const user = users.find(u => u.login === login);
-  if (!user) return res.status(400).json({ error: 'Пользователь не найден' });
-
-  const match = await bcrypt.compare(password, user.passwordHash);
-  if (!match) return res.status(400).json({ error: 'Неверный пароль' });
-
-  const token = jwt.sign({ id: user.id, name: user.name, login: user.login }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ ok: true, token, name: user.name, login: user.login });
-});
-
-// админская страница для смены сервера
-app.get('/api/admin', (req, res) => {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-
-  const token = auth.split(' ')[1];
   try {
-    const data = jwt.verify(token, JWT_SECRET);
-    if (data.login !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    // читаем сервер из файла
-    const configPath = path.join(__dirname, 'server_config.json');
-    let config = { signalingServer: '' };
-    if (fs.existsSync(configPath)) config = JSON.parse(fs.readFileSync(configPath));
-    res.json({ ok: true, signalingServer: config.signalingServer });
+    const { login, password } = req.body;
+    const users = readUsers();
+    const user = users.find(u => u.login === login);
+    if (!user) return res.status(400).json({ error: 'Пользователь не найден' });
+
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) return res.status(400).json({ error: 'Неверный пароль' });
+
+    const token = jwt.sign({ id: user.id, name: user.name, login: user.login }, JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ ok: true, token, name: user.name });
   } catch (e) {
-    return res.status(401).json({ error: 'Invalid token' });
+    console.error(e);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-app.post('/api/admin', (req, res) => {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-
-  const token = auth.split(' ')[1];
-  try {
-    const data = jwt.verify(token, JWT_SECRET);
-    if (data.login !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
-    const { signalingServer } = req.body;
-    const configPath = path.join(__dirname, 'server_config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ signalingServer }, null, 2));
-    res.json({ ok: true });
-  } catch (e) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-});
-
-// ==== Socket.IO сигналинг ====
+// ===== WebRTC signaling =====
 const rooms = {};
 
 io.on('connection', socket => {
-  console.log('socket connected', socket.id);
+  console.log('connected:', socket.id);
 
   socket.on('create-room', ({ roomCode, title }, cb) => {
     if (!roomCode) return cb && cb({ ok: false, error: 'Empty roomCode' });
@@ -150,8 +117,9 @@ io.on('connection', socket => {
       const roomClients = io.sockets.adapter.rooms.get(roomCode);
       if (!roomClients || roomClients.size === 0) delete rooms[roomCode];
     }
+    console.log('disconnected:', socket.id);
   });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('Server listening on', PORT));
+server.listen(PORT, () => console.log('Server running on port', PORT));
