@@ -5,19 +5,18 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
-const cors = require('cors'); // <- добавили cors
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-// Путь к файлу пользователей
 const USERS_FILE = path.join(__dirname, 'users.json');
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret1396';
 
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([]));
 
-app.use(cors()); // <- включили CORS для всех доменов
+app.use(cors());
 app.use(express.json());
 
 // ===== Пользователи =====
