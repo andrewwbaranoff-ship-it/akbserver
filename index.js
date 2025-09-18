@@ -4,8 +4,8 @@ const { Server } = require('socket.io');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const path = require('path');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,12 +20,8 @@ app.use(cors());
 app.use(express.json());
 
 // ===== Пользователи =====
-function readUsers() {
-  return JSON.parse(fs.readFileSync(USERS_FILE));
-}
-function writeUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
+function readUsers() { return JSON.parse(fs.readFileSync(USERS_FILE)); }
+function writeUsers(users) { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
 
 // Регистрация
 app.post('/api/register', async (req, res) => {
@@ -40,10 +36,7 @@ app.post('/api/register', async (req, res) => {
     users.push({ id: Date.now(), name, login, passwordHash: hash });
     writeUsers(users);
     return res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  } catch(e) { return res.status(500).json({ error: 'Server error' }); }
 });
 
 // Вход
@@ -59,13 +52,10 @@ app.post('/api/login', async (req, res) => {
 
     const token = jwt.sign({ id: user.id, name: user.name, login: user.login }, JWT_SECRET, { expiresIn: '7d' });
     return res.json({ ok: true, token, name: user.name });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  } catch(e) { return res.status(500).json({ error: 'Server error' }); }
 });
 
-// ===== WebRTC Signaling =====
+// ===== WebRTC сигналинг + чат =====
 const rooms = {};
 
 io.on('connection', socket => {
@@ -95,21 +85,13 @@ io.on('connection', socket => {
     socket.to(roomCode).emit('peer-joined', { id: socket.id, displayName: socket.displayName });
   });
 
-  socket.on('offer', ({ target, sdp }) => {
-    io.to(target).emit('offer', { from: socket.id, sdp, displayName: socket.displayName });
-  });
+  socket.on('offer', ({ target, sdp }) => { io.to(target).emit('offer', { from: socket.id, sdp, displayName: socket.displayName }); });
+  socket.on('answer', ({ target, sdp }) => { io.to(target).emit('answer', { from: socket.id, sdp }); });
+  socket.on('ice-candidate', ({ target, candidate }) => { io.to(target).emit('ice-candidate', { from: socket.id, candidate }); });
 
-  socket.on('answer', ({ target, sdp }) => {
-    io.to(target).emit('answer', { from: socket.id, sdp });
-  });
-
-  socket.on('ice-candidate', ({ target, candidate }) => {
-    io.to(target).emit('ice-candidate', { from: socket.id, candidate });
-  });
-
-  socket.on('chat-message', ({ roomCode, text, fromName }) => {
+  socket.on('chat-message', ({ roomCode, text, type, fromName }) => {
     if (!roomCode) return;
-    io.in(roomCode).emit('chat-message', { fromName, text });
+    io.in(roomCode).emit('chat-message', { fromName, text, type });
   });
 
   socket.on('disconnect', () => {
